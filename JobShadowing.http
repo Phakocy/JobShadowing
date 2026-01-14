@@ -1,0 +1,6 @@
+@JobShadowing_HostAddress = http://localhost:5134
+
+GET {{JobShadowing_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
