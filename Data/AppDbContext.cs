@@ -19,7 +19,7 @@ namespace JobShadowing.Data
             modelBuilder.Entity<TaskItem>(entity =>
             {
                 entity.HasKey(e => e.Id);
-                entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.Description).HasMaxLength(1000);
 
                 // Create index on Status for faster queries

@@ -1,6 +1,15 @@
-@JobShadowing_HostAddress = http://localhost:5134
+@JobShadowing_HostAddress = https://localhost:7146
 
 GET {{JobShadowing_HostAddress}}/weatherforecast/
 Accept: application/json
+
+###
+
+POST {{JobShadowing_HostAddress}}/api/tasks
+Content-Type: application/json
+
+{
+  //TaskItem
+}
 
 ###
