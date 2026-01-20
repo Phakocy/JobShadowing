@@ -1,16 +1,16 @@
-﻿namespace JobShadowing.Models
+﻿namespace JobShadowing.Models.Entities
 {
     public class TaskItem
     {
-        public int Id { get; set; }  // EF Core recognizes "Id" as primary key by convention
+        public int Id { get; set; }
 
-        public string Title { get; set; } = string.Empty;  // default value (prevents null warnings)
+        public string Title { get; set; } = string.Empty;
 
         //public required string Title { get; set; }  // C# 8+ feature: required to avoid nullability warnings
 
-        public string? Description { get; set; }  // ? means nullable - new to C# if coming from Java
+        public string? Description { get; set; }
 
-        public TaskStatus Status { get; set; } = TaskStatus.Todo;
+        public UserTaskStatus Status { get; set; } = UserTaskStatus.Todo;
 
         public DateTime? DueDate { get; set; }
 
@@ -20,7 +20,7 @@
     }
 
 
-    public enum TaskStatus
+    public enum UserTaskStatus
     {
         Todo = 0,
         InProgress = 1,

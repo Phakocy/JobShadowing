@@ -1,4 +1,4 @@
-﻿using JobShadowing.Models;
+﻿using JobShadowing.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace JobShadowing.Data

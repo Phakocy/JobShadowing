@@ -1,18 +1,18 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using JobShadowing.Data;
-using JobShadowing.Models;
+using JobShadowing.Models.Entities;
+using JobShadowing.Models.Dtos;
 
 namespace JobShadowing.Controllers
 
 {
-    [Route("api/[controller]")]  // Creates route: /api/tasks
-    [ApiController]              // Enables automatic model validation, binding, etc.
+    [Route("api/[controller]")]  
+    [ApiController]
     public class TasksController : ControllerBase
     {
         private readonly AppDbContext _context;
 
-        // Constructor injection (like @Autowired but cleaner)
         public TasksController(AppDbContext context)
         {
             _context = context;
@@ -20,14 +20,60 @@ namespace JobShadowing.Controllers
 
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<TaskItem>>> GetTasks()
+        public async Task<ActionResult<IEnumerable<TaskItem>>> GetTasks(
+            [FromQuery] int? status,
+            [FromQuery] DateTime? dueBefore,
+            [FromQuery] string? sortBy,
+            [FromQuery] string sortOrder = "asc",
+            [FromQuery] int pageNumber = 1,
+            [FromQuery] int pageSize = 10)
         {
-            return await _context.Tasks.ToListAsync();
+            //return await _context.Tasks.ToListAsync();
+
+            IQueryable<TaskItem> query = _context.Tasks;
+
+            if (status.HasValue)
+            {
+                query = query.Where(t => t.Status == (UserTaskStatus)status.Value);
+            }
+
+            if (dueBefore.HasValue)
+            {
+                query = query.Where(t => t.DueDate <= dueBefore.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(sortBy))
+            {
+                bool isDescending = sortOrder.ToLower() == "desc";
+
+                query = sortBy.ToLower() switch
+                {
+                    "duedate" => isDescending ? query.OrderByDescending(t => t.DueDate) : query.OrderBy(t => t.DueDate),
+                    "title" => isDescending ? query.OrderByDescending(t => t.Title) : query.OrderBy(t => t.Title),
+                    "status" => isDescending ? query.OrderByDescending(t => t.Status) : query.OrderBy(t => t.Status),
+                    _ => query.OrderBy(t => t.Id)
+                };
+            }
+
+            var itemsToSkip = (pageNumber - 1) * pageSize;
+            var totalItems = await query.CountAsync();
+            var items = await query.Skip(itemsToSkip).Take(pageSize).ToListAsync();
+
+            return Ok(new
+            {
+                TotalCount = totalItems,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                Data = items
+            });
+
+            //return await query.ToListAsync();
         }
 
 
+
         [HttpGet("{id}")]
-        public async Task<ActionResult<TaskItem>> GetTask(int id)
+        public async Task<ActionResult<TaskSummaryDto>> GetTask(int id)
         {
             var task = await _context.Tasks.FindAsync(id);
 
@@ -36,14 +82,31 @@ namespace JobShadowing.Controllers
                 return NotFound();
             }
 
-            return task;
+            var taskSummaryDto = new TaskSummaryDto
+            {
+                Title = task.Title,
+                Description = task.Description,
+                ClosedDate = task.DueDate,
+                Status = task.Status,
+                LastChangeDate = task.UpdatedAt,
+                StartDate = task.CreatedAt
+            };
+
+            return taskSummaryDto;
         }
 
 
 
         [HttpPost]
-        public async Task<ActionResult<TaskItem>> CreateTask(TaskItem taskItem)
+        public async Task<ActionResult<TaskItem>> CreateTask(TaskItemDto taskItemDto)
         {
+            var taskItem = new TaskItem
+            {
+                Title = taskItemDto.Title,
+                Description = taskItemDto.Description,
+                DueDate = taskItemDto?.DueDate,
+            };
+
             _context.Tasks.Add(taskItem);
             await _context.SaveChangesAsync();
 
@@ -52,7 +115,6 @@ namespace JobShadowing.Controllers
 
 
 
-        // PUT: api/tasks/5
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateTask(int id, TaskItem taskItem)
         {
@@ -81,7 +143,6 @@ namespace JobShadowing.Controllers
         }
 
 
-        // DELETE: api/tasks/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTask(int id)
         {
