@@ -35,26 +35,29 @@ namespace JobShadowing.Services
             };
 
             var totalItems = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalItems / (double)p.PageSize);
 
             var items = await query
                 .Skip((p.PageNumber - 1) * p.PageSize)
                 .Take(p.PageSize)
                 .Select(t => new TaskSummaryDto
                 {
+                    Id = t.Id,
                     Title = t.Title,
                     Status = t.Status,
-                    Description = t.Description,
-                    ClosedDate = t.DueDate,
-                    StartDate = t.CreatedAt,
-                    LastChangeDate = t.UpdatedAt
+                    DueDate = t.DueDate,
+                    IsOverdue = t.DueDate.HasValue && t.DueDate.Value < DateTime.UtcNow
                 })
                 .ToListAsync();
 
             return new PagedResult<TaskSummaryDto>
             {
                 TotalCount = totalItems,
-                PageNumber = p.PageNumber,
+                Page = p.PageNumber,
                 PageSize = p.PageSize,
+                TotalPages = totalPages,
+                HasPrevious = p.PageNumber > 1,
+                HasNext = p.PageNumber < totalPages,
                 Data = items
             };
         }

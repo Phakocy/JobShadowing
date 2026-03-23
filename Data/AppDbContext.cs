@@ -9,9 +9,8 @@ namespace JobShadowing.Data
         {
         }
 
-        public DbSet<TaskItem> Tasks { get; set; }  // Like @Repository in Spring Data JPA
+        public DbSet<TaskItem> Tasks { get; set; }
 
-        // Optional: Configure entity behavior
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -22,7 +21,6 @@ namespace JobShadowing.Data
                 entity.Property(e => e.Title).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.Description).HasMaxLength(1000);
 
-                // Create index on Status for faster queries
                 entity.HasIndex(e => e.Status);
             });
         }
