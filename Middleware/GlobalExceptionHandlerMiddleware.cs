@@ -60,9 +60,10 @@ namespace JobShadowing.Middleware
                     break;
 
                 case UnauthorizedAccessException:
-                    context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                    response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                    response.Message = "Unauthorized access";
+                    context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
+                    response.StatusCode = (int)HttpStatusCode.Forbidden;
+                    response.Message = "Access denied";
+                    response.DetailedMessage = _env.IsDevelopment() ? exception.Message : null;
                     break;
 
                 default:

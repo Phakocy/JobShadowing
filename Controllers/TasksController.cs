@@ -1,7 +1,10 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AutoMapper;
 using JobShadowing.Data;
+using JobShadowing.Interfaces;
 using JobShadowing.Models.Dtos;
 using JobShadowing.Models.Entities;
 
@@ -9,20 +12,39 @@ namespace JobShadowing.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class TasksController : ControllerBase
     {
         private readonly AppDbContext _context;
         private readonly IMapper _mapper;
         private readonly ILogger<TasksController> _logger;
+        private readonly IProjectService _projectService;
 
         public TasksController(
             AppDbContext context,
             IMapper mapper,
-            ILogger<TasksController> logger)
+            ILogger<TasksController> logger,
+            IProjectService projectService)
         {
             _context = context;
             _mapper = mapper;
             _logger = logger;
+            _projectService = projectService;
+        }
+
+        private int GetCurrentUserId()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+            {
+                throw new UnauthorizedAccessException("Invalid user token");
+            }
+            return userId;
+        }
+
+        private bool IsAdmin()
+        {
+            return User.IsInRole(UserRole.Admin.ToString());
         }
 
         [HttpGet]
@@ -36,10 +58,17 @@ namespace JobShadowing.Controllers
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10)
         {
-            _logger.LogInformation("Getting tasks - Status: {Status}, IsOverdue: {IsOverdue}, Search: {Search}, Page: {Page}",
-                status, isOverdue, search, page);
+            var userId = GetCurrentUserId();
+            _logger.LogInformation("Getting tasks for user {UserId} - Status: {Status}, IsOverdue: {IsOverdue}, Search: {Search}, Page: {Page}",
+                userId, status, isOverdue, search, page);
 
             var query = _context.Tasks.AsQueryable();
+
+            // Admin can see all tasks, regular users only see their own
+            if (!IsAdmin())
+            {
+                query = query.Where(t => t.UserId == userId);
+            }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -101,9 +130,11 @@ namespace JobShadowing.Controllers
         [HttpGet("{id}")]
         [ProducesResponseType(typeof(TaskResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<TaskResponseDto>> GetTask(int id)
         {
-            _logger.LogInformation("Getting task with ID: {TaskId}", id);
+            var userId = GetCurrentUserId();
+            _logger.LogInformation("Getting task with ID: {TaskId} for user {UserId}", id, userId);
 
             var task = await _context.Tasks.FindAsync(id);
 
@@ -113,6 +144,13 @@ namespace JobShadowing.Controllers
                 throw new KeyNotFoundException($"Task with ID {id} not found");
             }
 
+            // Check ownership (admins can view any task)
+            if (!IsAdmin() && task.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} attempted to access task {TaskId} owned by {OwnerId}", userId, id, task.UserId);
+                throw new UnauthorizedAccessException("You do not have permission to access this task");
+            }
+
             var taskDto = _mapper.Map<TaskResponseDto>(task);
             return Ok(taskDto);
         }
@@ -120,11 +158,25 @@ namespace JobShadowing.Controllers
         [HttpPost]
         [ProducesResponseType(typeof(TaskResponseDto), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<TaskResponseDto>> CreateTask(CreateTaskDto createTaskDto)
         {
-            _logger.LogInformation("Creating new task: {Title}", createTaskDto.Title);
+            var userId = GetCurrentUserId();
+            _logger.LogInformation("Creating new task: {Title} for user {UserId}", createTaskDto.Title, userId);
+
+            // If projectId is specified, verify user has access to the project
+            if (createTaskDto.ProjectId.HasValue)
+            {
+                var canAccess = await _projectService.CanUserAccessProjectAsync(userId, createTaskDto.ProjectId.Value);
+                if (!canAccess)
+                {
+                    throw new UnauthorizedAccessException("You do not have access to this project");
+                }
+            }
 
             var taskItem = _mapper.Map<TaskItem>(createTaskDto);
+            taskItem.UserId = userId;
+            taskItem.ProjectId = createTaskDto.ProjectId;
 
             _context.Tasks.Add(taskItem);
             await _context.SaveChangesAsync();
@@ -141,9 +193,11 @@ namespace JobShadowing.Controllers
         [ProducesResponseType(typeof(TaskResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<TaskResponseDto>> UpdateTask(int id, UpdateTaskDto updateTaskDto)
         {
-            _logger.LogInformation("Updating task with ID: {TaskId}", id);
+            var userId = GetCurrentUserId();
+            _logger.LogInformation("Updating task with ID: {TaskId} for user {UserId}", id, userId);
 
             var existingTask = await _context.Tasks.FindAsync(id);
 
@@ -151,6 +205,13 @@ namespace JobShadowing.Controllers
             {
                 _logger.LogWarning("Task with ID {TaskId} not found for update", id);
                 throw new KeyNotFoundException($"Task with ID {id} not found");
+            }
+
+            // Check ownership (only owner can update)
+            if (existingTask.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} attempted to update task {TaskId} owned by {OwnerId}", userId, id, existingTask.UserId);
+                throw new UnauthorizedAccessException("You do not have permission to update this task");
             }
 
             _mapper.Map(updateTaskDto, existingTask);
@@ -177,9 +238,11 @@ namespace JobShadowing.Controllers
         [ProducesResponseType(typeof(TaskResponseDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<TaskResponseDto>> PatchTask(int id, PatchTaskDto patchTaskDto)
         {
-            _logger.LogInformation("Patching task with ID: {TaskId}", id);
+            var userId = GetCurrentUserId();
+            _logger.LogInformation("Patching task with ID: {TaskId} for user {UserId}", id, userId);
 
             var existingTask = await _context.Tasks.FindAsync(id);
 
@@ -187,6 +250,13 @@ namespace JobShadowing.Controllers
             {
                 _logger.LogWarning("Task with ID {TaskId} not found for patch", id);
                 throw new KeyNotFoundException($"Task with ID {id} not found");
+            }
+
+            // Check ownership (only owner can patch)
+            if (existingTask.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} attempted to patch task {TaskId} owned by {OwnerId}", userId, id, existingTask.UserId);
+                throw new UnauthorizedAccessException("You do not have permission to update this task");
             }
 
             if (patchTaskDto.Title != null)
@@ -223,9 +293,11 @@ namespace JobShadowing.Controllers
         [HttpDelete("{id}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> DeleteTask(int id)
         {
-            _logger.LogInformation("Deleting task with ID: {TaskId}", id);
+            var userId = GetCurrentUserId();
+            _logger.LogInformation("Deleting task with ID: {TaskId} for user {UserId}", id, userId);
 
             var task = await _context.Tasks.FindAsync(id);
 
@@ -233,6 +305,13 @@ namespace JobShadowing.Controllers
             {
                 _logger.LogWarning("Task with ID {TaskId} not found for deletion", id);
                 throw new KeyNotFoundException($"Task with ID {id} not found");
+            }
+
+            // Admin can delete any task, regular users only their own
+            if (!IsAdmin() && task.UserId != userId)
+            {
+                _logger.LogWarning("User {UserId} attempted to delete task {TaskId} owned by {OwnerId}", userId, id, task.UserId);
+                throw new UnauthorizedAccessException("You do not have permission to delete this task");
             }
 
             _context.Tasks.Remove(task);

@@ -19,5 +19,7 @@ namespace JobShadowing.Models.Dtos
         [DataType(DataType.DateTime)]
         [FutureDate(ErrorMessage = "Due date must be in the future")]
         public DateTime? DueDate { get; set; }
+
+        public int? ProjectId { get; set; }
     }
 }
