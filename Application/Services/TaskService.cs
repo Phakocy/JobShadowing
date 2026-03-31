@@ -1,0 +1,65 @@
+using JobShadowing.Application.DTOs;
+using JobShadowing.Application.Interfaces;
+using JobShadowing.Domain.Entities;
+using JobShadowing.Domain.Enums;
+using JobShadowing.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+
+namespace JobShadowing.Application.Services
+{
+    public class TaskService : ITaskService
+    {
+        private readonly AppDbContext _context;
+
+        public TaskService(AppDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<PagedResult<TaskSummaryDto>> GetAllTasksAsync(TaskQueryParameters p)
+        {
+            IQueryable<TaskItem> query = _context.Tasks;
+
+            if (p.Status.HasValue)
+                query = query.Where(t => t.Status == (UserTaskStatus)p.Status.Value);
+
+            if (p.DueBefore.HasValue)
+                query = query.Where(t => t.DueDate <= p.DueBefore.Value);
+
+            bool isDescending = p.SortOrder?.ToLower() == "desc";
+            query = p.SortBy?.ToLower() switch
+            {
+                "duedate" => isDescending ? query.OrderByDescending(t => t.DueDate) : query.OrderBy(t => t.DueDate),
+                "title" => isDescending ? query.OrderByDescending(t => t.Title) : query.OrderBy(t => t.Title),
+                _ => query.OrderBy(t => t.Id)
+            };
+
+            var totalItems = await query.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalItems / (double)p.PageSize);
+
+            var items = await query
+                .Skip((p.PageNumber - 1) * p.PageSize)
+                .Take(p.PageSize)
+                .Select(t => new TaskSummaryDto
+                {
+                    Id = t.Id,
+                    Title = t.Title,
+                    Status = t.Status,
+                    DueDate = t.DueDate,
+                    IsOverdue = t.DueDate.HasValue && t.DueDate.Value < DateTime.UtcNow
+                })
+                .ToListAsync();
+
+            return new PagedResult<TaskSummaryDto>
+            {
+                TotalCount = totalItems,
+                Page = p.PageNumber,
+                PageSize = p.PageSize,
+                TotalPages = totalPages,
+                HasPrevious = p.PageNumber > 1,
+                HasNext = p.PageNumber < totalPages,
+                Data = items
+            };
+        }
+    }
+}

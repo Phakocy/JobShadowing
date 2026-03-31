@@ -1,11 +1,11 @@
 using System.Text;
-using JobShadowing.Data;
-using JobShadowing.Interfaces;
-using JobShadowing.Mappings;
-using JobShadowing.Middleware;
-using JobShadowing.Models.Dtos;
+using JobShadowing.Application.DTOs;
+using JobShadowing.Application.Interfaces;
+using JobShadowing.Application.Services;
+using JobShadowing.Infrastructure.Data;
+using JobShadowing.Infrastructure.Mappings;
+using JobShadowing.API.Middleware;
 using JobShadowing.Models.Settings;
-using JobShadowing.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
