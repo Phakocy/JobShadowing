@@ -14,6 +14,7 @@ namespace JobShadowing.Infrastructure.Data
         public DbSet<Project> Projects { get; set; }
         public DbSet<Team> Teams { get; set; }
         public DbSet<TeamMember> TeamMembers { get; set; }
+        public DbSet<TaskAttachment> TaskAttachments { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -102,6 +103,27 @@ namespace JobShadowing.Infrastructure.Data
                     .WithMany(t => t.Members)
                     .HasForeignKey(tm => tm.TeamId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // TaskAttachment configuration
+            modelBuilder.Entity<TaskAttachment>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.FileName).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.StoredFileName).IsRequired().HasMaxLength(500);
+                entity.Property(e => e.ContentType).IsRequired().HasMaxLength(100);
+
+                entity.HasIndex(e => e.TaskId);
+
+                entity.HasOne(a => a.Task)
+                    .WithMany(t => t.Attachments)
+                    .HasForeignKey(a => a.TaskId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(a => a.UploadedBy)
+                    .WithMany()
+                    .HasForeignKey(a => a.UploadedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }

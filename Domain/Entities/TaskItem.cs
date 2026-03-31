@@ -27,5 +27,6 @@ namespace JobShadowing.Domain.Entities
         // Navigation properties
         public User User { get; set; } = null!;
         public Project? Project { get; set; }
+        public ICollection<TaskAttachment> Attachments { get; set; } = new List<TaskAttachment>();
     }
 }

@@ -2,11 +2,14 @@ using JobShadowing.Application.DTOs;
 using JobShadowing.Application.DTOs.Auth;
 using JobShadowing.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace JobShadowing.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Produces("application/json")]
+    [Tags("Authentication")]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
@@ -18,7 +21,11 @@ namespace JobShadowing.API.Controllers
             _logger = logger;
         }
 
+        // Register a new user account
+        /// <param name="registerDto">User registration details</param>
+        // <returns>The created user information</returns>
         [HttpPost("register")]
+        [SwaggerOperation(Summary = "Register a new user", Description = "Creates a new user account with the provided credentials")]
         [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
@@ -33,9 +40,13 @@ namespace JobShadowing.API.Controllers
             return CreatedAtAction(nameof(Register), userDto);
         }
 
+        // Login to get a JWT token
+        /// <param name="loginDto">User login credentials</param>
+        // <returns>JWT token and user information</returns>
         [HttpPost("login")]
+        [SwaggerOperation(Summary = "Login and get JWT token", Description = "Authenticates user and returns a JWT token for API access")]
         [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<AuthResponseDto>> Login(LoginDto loginDto)
         {
             _logger.LogInformation("Login attempt for email: {Email}", loginDto.Email);
